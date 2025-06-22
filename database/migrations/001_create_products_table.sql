@@ -2,12 +2,7 @@
 -- Created: 2025-06-21
 -- Description: Initial products table with proper indexing and constraints
 
--- Create database if it doesn't exist
-CREATE DATABASE IF NOT EXISTS my_backend_db 
-CHARACTER SET utf8mb4 
-COLLATE utf8mb4_unicode_ci;
-
-USE my_backend_db;
+-- Note: Database connection is handled by the migration script
 
 -- Create products table
 CREATE TABLE IF NOT EXISTS products (
@@ -41,18 +36,4 @@ CREATE TABLE IF NOT EXISTS products (
   COLLATE utf8mb4_unicode_ci
   COMMENT='Products table with enterprise-grade structure';
 
--- Create migrations tracking table
-CREATE TABLE IF NOT EXISTS migrations (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    migration_name VARCHAR(255) NOT NULL UNIQUE,
-    executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    INDEX idx_migration_name (migration_name)
-) ENGINE=InnoDB 
-  CHARACTER SET utf8mb4 
-  COLLATE utf8mb4_unicode_ci
-  COMMENT='Track executed database migrations';
-
--- Record this migration
-INSERT IGNORE INTO migrations (migration_name) 
-VALUES ('001_create_products_table.sql');
+-- Migration tracking is handled by the migration script

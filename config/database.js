@@ -42,11 +42,11 @@ class DatabaseManager {
         waitForConnections: true,
         connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT) || 10,
         queueLimit: 0,
-        acquireTimeout: parseInt(process.env.DB_ACQUIRE_TIMEOUT) || 60000,
-        timeout: parseInt(process.env.DB_TIMEOUT) || 60000,
-        reconnect: true,
         charset: 'utf8mb4',
-        timezone: '+00:00'
+        timezone: '+00:00',
+        // Remove invalid options that cause warnings
+        connectTimeout: parseInt(process.env.DB_TIMEOUT) || 60000,
+        acquireTimeout: parseInt(process.env.DB_ACQUIRE_TIMEOUT) || 60000
       };
 
       logger.info('Initializing database connection pool...', {

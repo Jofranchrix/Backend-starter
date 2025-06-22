@@ -4,7 +4,15 @@
   "description": "my first backend task",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "migrate": "node database/migrate.js up",
+    "migrate:rollback": "node database/migrate.js rollback",
+    "seed": "node database/seeders/ProductSeeder.js seed",
+    "seed:clear": "node database/seeders/ProductSeeder.js clear",
+    "seed:reset": "node database/seeders/ProductSeeder.js reset",
+    "test": "node tests/database-test.js",
+    "setup": "npm run migrate && npm run seed"
   },
   "author": "adula joe",
   "license": "ISC",
@@ -17,6 +25,7 @@
     "joi": "^17.13.3",
     "morgan": "^1.10.0",
     "mysql2": "^3.14.1",
+    "sqlite3": "^5.1.7",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "winston": "^3.17.0"

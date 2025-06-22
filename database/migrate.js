@@ -11,12 +11,13 @@ class MigrationRunner {
 
   async connect() {
     try {
-      // First connect without database to create it if needed
+      // Connect directly to the target database
       this.connection = await mysql.createConnection({
         host: process.env.DB_HOST || 'localhost',
         port: parseInt(process.env.DB_PORT) || 3306,
         user: process.env.DB_USER || 'root',
         password: process.env.DB_PASSWORD || '',
+        database: process.env.DB_NAME || 'my_backend_db',
         multipleStatements: true
       });
 
@@ -46,18 +47,34 @@ class MigrationRunner {
     }
   }
 
+  async ensureMigrationsTable() {
+    try {
+      await this.connection.execute(`
+        CREATE TABLE IF NOT EXISTS migrations (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          migration_name VARCHAR(255) NOT NULL UNIQUE,
+          executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_migration_name (migration_name)
+        ) ENGINE=InnoDB
+          CHARACTER SET utf8mb4
+          COLLATE utf8mb4_unicode_ci
+          COMMENT='Track executed database migrations'
+      `);
+    } catch (error) {
+      console.error('Failed to create migrations table:', error.message);
+      throw error;
+    }
+  }
+
   async getExecutedMigrations() {
     try {
-      // First ensure we're using the correct database
-      await this.connection.execute(`USE ${process.env.DB_NAME || 'my_backend_db'}`);
-      
+      await this.ensureMigrationsTable();
       const [rows] = await this.connection.execute(
         'SELECT migration_name FROM migrations ORDER BY executed_at'
       );
       return rows.map(row => row.migration_name);
     } catch (error) {
-      // If migrations table doesn't exist, return empty array
-      console.log('Migrations table not found, will be created during first migration');
+      console.error('Failed to get executed migrations:', error.message);
       return [];
     }
   }
@@ -66,12 +83,18 @@ class MigrationRunner {
     try {
       const filePath = path.join(this.migrationsDir, filename);
       const sql = await fs.readFile(filePath, 'utf8');
-      
+
       console.log(`Executing migration: ${filename}`);
-      
+
       // Execute the migration SQL
       await this.connection.execute(sql);
-      
+
+      // Record the migration as executed
+      await this.connection.execute(
+        'INSERT INTO migrations (migration_name) VALUES (?)',
+        [filename]
+      );
+
       console.log(`✓ Migration ${filename} executed successfully`);
     } catch (error) {
       console.error(`✗ Failed to execute migration ${filename}:`, error.message);
