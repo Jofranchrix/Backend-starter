@@ -1,3 +1,4 @@
+require('dotenv').config();
 const ProductRepository = require('../../repositories/ProductRepository');
 const databaseManager = require('../../config/database');
 

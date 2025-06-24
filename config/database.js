@@ -171,6 +171,17 @@ class DatabaseManager {
   }
 
   /**
+   * Get a connection from the pool
+   */
+  async getConnection() {
+    if (!this.isConnected || !this.pool) {
+      throw new Error('Database not connected. Please initialize the connection first.');
+    }
+
+    return await this.pool.getConnection();
+  }
+
+  /**
    * Execute a transaction
    */
   async transaction(callback) {
@@ -179,16 +190,16 @@ class DatabaseManager {
     }
 
     const connection = await this.pool.getConnection();
-    
+
     try {
       await connection.beginTransaction();
       logger.debug('Transaction started');
-      
+
       const result = await callback(connection);
-      
+
       await connection.commit();
       logger.debug('Transaction committed successfully');
-      
+
       return result;
     } catch (error) {
       await connection.rollback();

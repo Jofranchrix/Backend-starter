@@ -11,6 +11,13 @@ const config = require('./config');
 const databaseManager = require('./config/database');
 const ProductRepository = require('./repositories/ProductRepository');
 
+// Import route modules
+const authRoutes = require('./routes/auth');
+const userRoutes = require('./routes/users');
+const categoryRoutes = require('./routes/categories');
+const orderRoutes = require('./routes/orders');
+const adminRoutes = require('./routes/admin');
+
 const app = express();
 const port = config.port;
 
@@ -31,12 +38,89 @@ const swaggerOptions = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'Simple API',
-      version: '1.0.0',
-      description: 'A simple Express API with Swagger'
+      title: 'Advanced Backend API',
+      version: '2.0.0',
+      description: 'A comprehensive Express API with authentication, user management, and e-commerce features'
     },
+    servers: [
+      {
+        url: `http://localhost:${config.port}`,
+        description: 'Development server'
+      }
+    ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT'
+        }
+      },
+      schemas: {
+        Product: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'integer',
+              description: 'Product ID',
+              example: 1
+            },
+            name: {
+              type: 'string',
+              description: 'Product name',
+              example: 'Nike Air Max 90'
+            },
+            price: {
+              type: 'number',
+              description: 'Product price',
+              example: 45000
+            },
+            sku: {
+              type: 'string',
+              description: 'Stock Keeping Unit',
+              example: 'NIKE-AM90-001'
+            },
+            description: {
+              type: 'string',
+              description: 'Product description',
+              example: 'Classic Nike Air Max 90 sneakers'
+            },
+            tags: {
+              type: 'array',
+              items: {
+                type: 'string'
+              },
+              description: 'Product tags',
+              example: ['shoes', 'sport', 'nike']
+            },
+            stock_quantity: {
+              type: 'integer',
+              description: 'Available stock quantity',
+              example: 100
+            },
+            is_active: {
+              type: 'boolean',
+              description: 'Whether the product is active',
+              example: true
+            },
+            created_at: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Creation timestamp',
+              example: '2025-06-24T17:00:00.000Z'
+            },
+            updated_at: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Last update timestamp',
+              example: '2025-06-24T17:00:00.000Z'
+            }
+          }
+        }
+      }
+    }
   },
-  apis: ['./index.js'], // Swagger will look here for JSDoc comments
+  apis: ['./index.js', './routes/*.js'], // Swagger will look here for JSDoc comments
 };
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
@@ -258,6 +342,19 @@ app.get('/metrics', (req, res) => {
  *           enum: [ASC, DESC]
  *           default: ASC
  *         description: Sort order
+ *       - in: query
+ *         name: tags
+ *         schema:
+ *           type: string
+ *         description: Filter by tags (comma-separated)
+ *         example: "shoes,sport"
+ *       - in: query
+ *         name: is_active
+ *         schema:
+ *           type: boolean
+ *         description: Filter by active status
+ *         example: true
+ *     tags: [Products]
  *     responses:
  *       200:
  *         description: Products retrieved successfully
@@ -266,10 +363,13 @@ app.get('/metrics', (req, res) => {
  *             schema:
  *               type: object
  *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Products retrieved successfully"
  *                 data:
  *                   type: array
  *                   items:
- *                     type: object
+ *                     $ref: '#/components/schemas/Product'
  *                 pagination:
  *                   type: object
  *                   properties:
@@ -379,24 +479,55 @@ app.get('/products/:id', async (req, res) => {
  * /products:
  *   post:
  *     summary: Create a new product
+ *     tags: [Products]
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - name
+ *               - price
  *             properties:
  *               name:
  *                 type: string
- *                 example: Nike Air Max
+ *                 minLength: 1
+ *                 maxLength: 255
+ *                 description: Product name (required)
+ *                 example: "Nike Air Max 90"
  *               price:
  *                 type: number
+ *                 minimum: 0
+ *                 description: Product price (required)
  *                 example: 45000
+ *               sku:
+ *                 type: string
+ *                 maxLength: 100
+ *                 description: Stock Keeping Unit (optional, must be unique if provided)
+ *                 example: "NIKE-AM90-001"
+ *               description:
+ *                 type: string
+ *                 maxLength: 1000
+ *                 description: Product description (optional)
+ *                 example: "Classic Nike Air Max 90 sneakers with premium materials"
  *               tags:
  *                 type: array
+ *                 maxItems: 10
  *                 items:
  *                   type: string
- *                 example: ["shoes", "sport"]
+ *                   maxLength: 50
+ *                 description: Product tags (optional, max 10 tags)
+ *                 example: ["shoes", "sport", "nike", "sneakers"]
+ *               stock_quantity:
+ *                 type: integer
+ *                 minimum: 0
+ *                 description: Available stock quantity (optional, defaults to 0)
+ *                 example: 100
+ *               is_active:
+ *                 type: boolean
+ *                 description: Whether the product is active (optional, defaults to true)
+ *                 example: true
  *     responses:
  *       201:
  *         description: Product created successfully
@@ -407,17 +538,35 @@ app.get('/products/:id', async (req, res) => {
  *               properties:
  *                 message:
  *                   type: string
+ *                   example: "Product created successfully"
  *                 data:
- *                   type: object
- *                   properties:
- *                     name:
- *                       type: string
- *                     price:
- *                       type: number
- *                     tags:
- *                       type: array
- *                       items:
- *                         type: string
+ *                   $ref: '#/components/schemas/Product'
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Validation Error"
+ *                 message:
+ *                   type: string
+ *                   example: "Product name is required"
+ *       409:
+ *         description: Duplicate SKU error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Conflict"
+ *                 message:
+ *                   type: string
+ *                   example: "SKU already exists"
  */
 app.post('/products', async (req, res) => {
   try {
@@ -585,6 +734,13 @@ app.delete('/products/:id', async (req, res) => {
     });
   }
 });
+
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Swagger route
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));

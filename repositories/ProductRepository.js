@@ -24,14 +24,12 @@ const logger = winston.createLogger({
  * Product Repository - handles all database operations for products
  */
 class ProductRepository {
-  constructor() {
-    this.tableName = 'products';
-  }
+  static tableName = 'products';
 
   /**
    * Create a new product
    */
-  async create(productData) {
+  static async create(productData) {
     try {
       // Validate input data
       const { error, value } = Product.validateCreate(productData);
@@ -43,7 +41,7 @@ class ProductRepository {
       const dbData = product.toDatabase();
 
       const sql = `
-        INSERT INTO ${this.tableName} 
+        INSERT INTO ${ProductRepository.tableName}
         (name, price, tags, description, sku, stock_quantity, is_active)
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `;
@@ -79,9 +77,9 @@ class ProductRepository {
   /**
    * Find product by ID
    */
-  async findById(id) {
+  static async findById(id) {
     try {
-      const sql = `SELECT * FROM ${this.tableName} WHERE id = ? AND is_active = true`;
+      const sql = `SELECT * FROM ${ProductRepository.tableName} WHERE id = ? AND is_active = true`;
       const results = await databaseManager.query(sql, [id]);
       
       if (results.length === 0) {
@@ -101,7 +99,7 @@ class ProductRepository {
   /**
    * Find all products with pagination and filtering
    */
-  async findAll(queryParams = {}) {
+  static async findAll(queryParams = {}) {
     try {
       // Validate query parameters
       const { error, value } = Product.validateQuery(queryParams);
@@ -120,6 +118,13 @@ class ProductRepository {
         is_active,
         tags
       } = value;
+
+      // Whitelist allowed sort columns for security
+      const allowedSortColumns = ['id', 'name', 'price', 'created_at', 'updated_at', 'sku'];
+      const safeSortBy = allowedSortColumns.includes(sort_by) ? sort_by : 'id';
+
+      // Whitelist allowed sort orders for security
+      const safeSortOrder = ['ASC', 'DESC'].includes(sort_order?.toUpperCase()) ? sort_order.toUpperCase() : 'ASC';
 
       // Build WHERE clause
       const whereConditions = [];
@@ -157,7 +162,7 @@ class ProductRepository {
         : '';
 
       // Count total records
-      const countSql = `SELECT COUNT(*) as total FROM ${this.tableName} ${whereClause}`;
+      const countSql = `SELECT COUNT(*) as total FROM ${ProductRepository.tableName} ${whereClause}`;
       const countResult = await databaseManager.query(countSql, params);
       const total = countResult[0].total;
 
@@ -166,14 +171,19 @@ class ProductRepository {
       const totalPages = Math.ceil(total / limit);
 
       // Build main query
+      // const sql = `
+      //   SELECT * FROM ${ProductRepository.tableName}
+      //   ${whereClause}
+      //   ORDER BY ${safeSortBy} ${safeSortOrder}
+      //   LIMIT ? OFFSET ?
+      // `;
       const sql = `
-        SELECT * FROM ${this.tableName} 
-        ${whereClause}
-        ORDER BY ${sort_by} ${sort_order}
-        LIMIT ? OFFSET ?
+        SELECT * FROM ${ProductRepository.tableName}
+         ${whereClause}
       `;
 
-      const results = await databaseManager.query(sql, [...params, limit, offset]);
+      // Ensure limit and offset are integers
+      const results = await databaseManager.query(sql, [...params, parseInt(limit), parseInt(offset)]);
       
       const products = results.map(row => Product.fromDatabase(row));
 
@@ -200,7 +210,7 @@ class ProductRepository {
   /**
    * Update product by ID
    */
-  async update(id, updateData) {
+  static async update(id, updateData) {
     try {
       // Validate input data
       const { error, value } = Product.validateUpdate(updateData);
@@ -235,7 +245,7 @@ class ProductRepository {
       params.push(id);
 
       const sql = `
-        UPDATE ${this.tableName} 
+        UPDATE ${ProductRepository.tableName}
         SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP
         WHERE id = ? AND is_active = true
       `;
@@ -266,10 +276,10 @@ class ProductRepository {
   /**
    * Soft delete product by ID
    */
-  async delete(id) {
+  static async delete(id) {
     try {
       const sql = `
-        UPDATE ${this.tableName} 
+        UPDATE ${ProductRepository.tableName}
         SET is_active = false, updated_at = CURRENT_TIMESTAMP
         WHERE id = ? AND is_active = true
       `;
@@ -295,9 +305,9 @@ class ProductRepository {
   /**
    * Hard delete product by ID (use with caution)
    */
-  async hardDelete(id) {
+  static async hardDelete(id) {
     try {
-      const sql = `DELETE FROM ${this.tableName} WHERE id = ?`;
+      const sql = `DELETE FROM ${ProductRepository.tableName} WHERE id = ?`;
       const result = await databaseManager.query(sql, [id]);
 
       if (result.affectedRows === 0) {
@@ -319,9 +329,9 @@ class ProductRepository {
   /**
    * Check if SKU exists
    */
-  async skuExists(sku, excludeId = null) {
+  static async skuExists(sku, excludeId = null) {
     try {
-      let sql = `SELECT id FROM ${this.tableName} WHERE sku = ? AND is_active = true`;
+      let sql = `SELECT id FROM ${ProductRepository.tableName} WHERE sku = ? AND is_active = true`;
       const params = [sku];
 
       if (excludeId) {
@@ -339,6 +349,35 @@ class ProductRepository {
       throw error;
     }
   }
+
+  /**
+   * Get product statistics
+   */
+  static async getStatistics() {
+    try {
+      const sql = `
+        SELECT
+          COUNT(*) as total_products,
+          COUNT(CASE WHEN is_active = true THEN 1 END) as active_products,
+          COUNT(CASE WHEN is_active = false THEN 1 END) as inactive_products,
+          AVG(price) as average_price,
+          MIN(price) as min_price,
+          MAX(price) as max_price,
+          COUNT(CASE WHEN stock_quantity = 0 THEN 1 END) as out_of_stock,
+          COUNT(CASE WHEN stock_quantity > 0 AND stock_quantity <= 10 THEN 1 END) as low_stock,
+          COUNT(CASE WHEN DATE(created_at) = CURDATE() THEN 1 END) as products_added_today,
+          COUNT(CASE WHEN DATE(created_at) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN 1 END) as products_added_this_week,
+          COUNT(CASE WHEN DATE(created_at) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 END) as products_added_this_month
+        FROM ${ProductRepository.tableName}
+      `;
+
+      const results = await databaseManager.query(sql, []);
+      return results[0];
+    } catch (error) {
+      console.error('Error getting product statistics:', error);
+      throw error;
+    }
+  }
 }
 
-module.exports = new ProductRepository();
+module.exports = ProductRepository;

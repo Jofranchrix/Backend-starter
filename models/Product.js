@@ -10,11 +10,21 @@ class Product {
     this.price = data.price || 0;
     this.tags = data.tags || [];
     this.description = data.description || '';
-    this.sku = data.sku || '';
+    // Generate SKU if not provided or if empty string
+    this.sku = (data.sku && data.sku.trim() !== '') ? data.sku : this.generateSKU();
     this.stock_quantity = data.stock_quantity || 0;
     this.is_active = data.is_active !== undefined ? data.is_active : true;
     this.created_at = data.created_at || null;
     this.updated_at = data.updated_at || null;
+  }
+
+  /**
+   * Generate a unique SKU if none is provided
+   */
+  generateSKU() {
+    const timestamp = Date.now();
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    return `PRD-${timestamp}-${random}`;
   }
 
   /**
@@ -42,7 +52,10 @@ class Product {
       
       description: joi.string().max(1000).allow('').default(''),
       
-      sku: joi.string().max(100).allow('').default(''),
+      sku: joi.string().max(100).allow('').optional()
+        .messages({
+          'string.max': 'SKU must not exceed 100 characters'
+        }),
       
       stock_quantity: joi.number().integer().min(0).default(0)
         .messages({
